@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 )
 
 var Version = "tip"
@@ -15,6 +16,7 @@ func main() {
 	flag.Parse()
 	if *version {
 		fmt.Printf("Sandvine API Aggregator %s", Version)
+		os.Exit(1)
 	}
 	s := &Server{
 		Addr:          *addr,
