@@ -22,7 +22,7 @@ type Server struct {
 	usev     chan string         // Upstream server discovery events.
 }
 
-// ListenAndServe makes the server start accepting connections.
+// ListenAndServe makes the server start accepting http connections.
 func (s *Server) ListenAndServe() error {
 	return http.ListenAndServe(s.Addr, s.Handler)
 }
@@ -32,7 +32,7 @@ func (s *Server) ListenAndServe() error {
 // keeps it in an internal list until a request to that server fails.
 //
 // The optional "ready" argument can be used to notify when this
-// server is running.
+// server is up and running. It is supposed to run on its own goroutine.
 func (s *Server) Discover(ready ...chan struct{}) error {
 	addr, err := net.ResolveUDPAddr("udp", s.MulticastAddr)
 	if err != nil {

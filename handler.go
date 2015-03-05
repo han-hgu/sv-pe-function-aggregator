@@ -24,8 +24,17 @@ type aggregateResponse struct {
 }
 
 // handleTables handles requests that return a list of tables from
-// the policy engine. If a specific table name is given at the
-// end of the URI, then we return rows from that table.
+// the policy engine.
+//
+// If no upstream servers are available it returns an empty JSON
+// array. In case an upstream server fails to handle the request,
+// we remove it from the list of available upstream servers until
+// it announces itself again via multicast.
+//
+// The response from this handler is a JSON object that contains
+// the URL of the upstream server being queries and its data.
+//
+// Requests to multiple upstream servers are executed concurrently.
 func handleTables(srv *Server) http.HandlerFunc {
 	f := func(w http.ResponseWriter, r *http.Request) {
 		wg := &sync.WaitGroup{}
@@ -79,6 +88,7 @@ func handleTables(srv *Server) http.HandlerFunc {
 	return corsHandler(f, "GET")
 }
 
+// TODO(afiori): Make requests and aggregate responses.
 func handleTableRows(srv *Server) http.HandlerFunc {
 	f := func(w http.ResponseWriter, r *http.Request) {
 		// Return 400 (Bad Request) if no table name is given.
@@ -88,7 +98,6 @@ func handleTableRows(srv *Server) http.HandlerFunc {
 			http.Error(w, http.StatusText(s), s)
 			return
 		}
-		// TODO(afiori): Make requests and aggregate responses.
 	}
 	return corsHandler(f, "GET")
 }
