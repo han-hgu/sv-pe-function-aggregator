@@ -1,7 +1,7 @@
 package main
 
 import (
-	"encoding/binary"
+	"errors"
 	"net"
 	"testing"
 	"time"
@@ -14,7 +14,7 @@ func TestServer_Discovery(t *testing.T) {
 	ready := make(chan struct{})
 	go s.Discover(ready)
 	<-ready
-	err := announceMulticast(s.MulticastAddr, 1111)
+	err := MulticastPing(s.MulticastAddr, 1111)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,18 +32,19 @@ func TestServer_Discovery(t *testing.T) {
 	}
 }
 
-func announceMulticast(addr string, port uint32) error {
-	a, err := net.ResolveUDPAddr("udp", addr)
-	if err != nil {
-		return err
+func TestServer_Upstream(t *testing.T) {
+	s := &Server{}
+	s.setUpstream("a")
+	s.setUpstream("b")
+	s.setUpstream("c")
+	s.foreachUpstream(func(s string) error {
+		if s == "a" {
+			// This forces a call to s.delUpstream.
+			return errors.New("failed")
+		}
+		return nil
+	})
+	if len(s.upstream) != 2 {
+		t.Fatalf("Unexpected # of upstreams. Want 2, have %d", len(s.upstream))
 	}
-	c, err := net.DialUDP("udp", nil, a)
-	if err != nil {
-		return err
-	}
-	defer c.Close()
-	b := make([]byte, 4)
-	binary.BigEndian.PutUint32(b, port)
-	_, err = c.Write(b)
-	return err
 }

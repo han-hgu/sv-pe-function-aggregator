@@ -99,25 +99,54 @@ func (s *Server) setUpstream(addr string) {
 // delUpstream removes the given upstream from the internal list.
 func (s *Server) delUpstream(addr string) {
 	s.mu.Lock()
-	delete(s.upstream, addr)
+	if s.upstream != nil {
+		delete(s.upstream, addr)
+	}
 	s.mu.Unlock()
 }
 
-// foreachUpstream loops over each upstream server calling f. In case f
-// returns an error, the upstream server is removed from the internal list.
+// foreachUpstream loops over each upstream server calling f in its own
+// goroutine. In case f returns an error, the upstream server is removed
+// from the internal list.
 func (s *Server) foreachUpstream(f func(addr string) error) {
-	var err error
-	var failed []string
 	s.mu.RLock()
+	i := 0
+	peers := make([]string, len(s.upstream))
 	for addr := range s.upstream {
-		if err = f(addr); err != nil {
-			failed = append(failed, addr)
-		}
+		peers[i] = addr
+		i++
 	}
 	s.mu.RUnlock()
-	if failed != nil && len(failed) > 0 {
-		for _, addr := range failed {
-			s.delUpstream(addr)
-		}
+	var err error
+	var wg sync.WaitGroup
+	for _, addr := range peers {
+		wg.Add(1)
+		go func(addr string) {
+			if err = f(addr); err != nil {
+				s.delUpstream(addr)
+			}
+			wg.Done()
+		}(addr)
 	}
+	wg.Wait()
+}
+
+// MulticastPing sends a UDP multicast packet containing a port number
+// encoded as uint32 in the payload. This is used to announce ourselves
+// to other servers like this, which are listening for announcements
+// using the Discover function.
+func MulticastPing(addr string, port uint32) error {
+	a, err := net.ResolveUDPAddr("udp", addr)
+	if err != nil {
+		return err
+	}
+	c, err := net.DialUDP("udp", nil, a)
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+	b := make([]byte, 4)
+	binary.BigEndian.PutUint32(b, port)
+	_, err = c.Write(b)
+	return err
 }

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
-	"sync"
 )
 
 // NewHandler creates and initializes an http.ServeMux that contains
@@ -37,53 +36,35 @@ type aggregateResponse struct {
 // Requests to multiple upstream servers are executed concurrently.
 func handleTables(srv *Server) http.HandlerFunc {
 	f := func(w http.ResponseWriter, r *http.Request) {
-		wg := &sync.WaitGroup{}
-		datac := make(chan *aggregateResponse)
-		n := 0
-		srv.foreachUpstream(func(addr string) error {
-			n++
-			wg.Add(1)
-			defer wg.Done()
-			url := "http://" + addr + "/tables"
-			errc := make(chan error)
-			go func() {
-				data, err := getTables(url)
-				if err != nil {
-					errc <- err
-					return
-				}
-				close(errc)
-				datac <- &aggregateResponse{
-					URL:  url,
-					Data: data,
-				}
-			}()
-			// In case of error, we remove this upstream
-			// server from the internal list.
-			return <-errc
-		})
-		wg.Wait()
-		if n == 0 {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode([]string{})
-			return
-		}
-		var data []interface{}
-	aggregation:
-		for i := 0; i < n; i++ {
-			select {
-			case chunk := <-datac:
-				data = append(data, chunk)
-			default:
-				break aggregation
+		data := make(chan []interface{})
+		tables := make(chan *aggregateResponse, 1)
+		go func() {
+			var d []interface{}
+			for table := range tables {
+				d = append(d, table)
 			}
-		}
+			data <- d
+		}()
+		srv.foreachUpstream(func(addr string) error {
+			url := "http://" + addr + "/tables"
+			data, err := getTables(url)
+			if err != nil {
+				return err
+			}
+			tables <- &aggregateResponse{
+				URL:  url,
+				Data: data,
+			}
+			return nil
+		})
+		close(tables)
+		d := <-data
 		w.Header().Set("Content-Type", "application/json")
-		if data == nil {
+		if d == nil {
 			json.NewEncoder(w).Encode([]string{})
 			return
 		}
-		json.NewEncoder(w).Encode(data)
+		json.NewEncoder(w).Encode(d)
 	}
 	return corsHandler(f, "GET")
 }
