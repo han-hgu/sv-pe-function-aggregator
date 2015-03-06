@@ -43,7 +43,7 @@ func (s *Server) Discover(ready ...chan struct{}) error {
 		return err
 	}
 	l.SetReadBuffer(maxDatagramSize)
-	b := make([]byte, 4)
+	b := make([]byte, 2)
 	for {
 		if ready != nil {
 			close(ready[0])
@@ -53,10 +53,10 @@ func (s *Server) Discover(ready ...chan struct{}) error {
 		if err != nil {
 			return err
 		}
-		if n != 4 {
+		if n != 2 {
 			continue
 		}
-		port := binary.BigEndian.Uint32(b)
+		port := binary.BigEndian.Uint16(b)
 		host, _, err := net.SplitHostPort(src.String())
 		if err != nil {
 			return err
@@ -137,10 +137,10 @@ func (s *Server) foreachUpstream(f func(addr string) error) {
 }
 
 // MulticastPing sends a UDP multicast packet containing a port number
-// encoded as uint32 in the payload. This is used to announce ourselves
+// encoded as uint16 in the payload. This is used to announce ourselves
 // to other servers like this, which are listening for announcements
 // using the Discover function.
-func MulticastPing(addr string, port uint32) error {
+func MulticastPing(addr string, port uint16) error {
 	a, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
 		return err
@@ -150,8 +150,8 @@ func MulticastPing(addr string, port uint32) error {
 		return err
 	}
 	defer c.Close()
-	b := make([]byte, 4)
-	binary.BigEndian.PutUint32(b, port)
+	b := make([]byte, 2)
+	binary.BigEndian.PutUint16(b, port)
 	_, err = c.Write(b)
 	return err
 }

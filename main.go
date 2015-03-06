@@ -48,7 +48,7 @@ func announce(interval time.Duration, multicast_addr, http_addr string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	v := uint32(p)
+	v := uint16(p)
 	for {
 		MulticastPing(multicast_addr, v)
 		time.Sleep(interval)
