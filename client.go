@@ -4,11 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+
+	"github.com/golang/glog"
 )
 
 // getTables queries a remote web server and return a list of tables
 // available in the policy engine of that server.
 func getTables(url string) (map[string][]string, error) {
+	glog.V(2).Infof("making request to upstream server %s", url)
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, err

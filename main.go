@@ -8,6 +8,8 @@ import (
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/golang/glog"
 )
 
 var Version = "tip"
@@ -24,15 +26,15 @@ func main() {
 		os.Exit(1)
 	}
 	if len(*maddr) > 0 && *maddr == *lmaddr {
-		log.Fatal("cannot announce ourselves to the same address that we listen on for multicast")
+		glog.Fatal("cannot announce ourselves to the same address that we listen on for multicast")
 	}
 	s := &Server{
 		Addr:          *laddr,
 		MulticastAddr: *lmaddr,
 	}
 	s.Handler = NewHandler(s)
-	go func() { log.Fatal(s.ListenAndServe()) }()
-	go func() { log.Fatal(s.Discover()) }()
+	go func() { glog.Fatal(s.ListenAndServe()) }()
+	go func() { glog.Fatal(s.Discover()) }()
 	if len(*maddr) > 0 {
 		go announce(*mintvl, *maddr, *laddr)
 	}
@@ -40,6 +42,8 @@ func main() {
 }
 
 func announce(interval time.Duration, multicast_addr, http_addr string) {
+	glog.Infof("sending announcements to %s every %s",
+		multicast_addr, interval)
 	_, port, err := net.SplitHostPort(http_addr)
 	if err != nil {
 		log.Fatal(err)

@@ -6,6 +6,9 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"time"
+
+	"github.com/golang/glog"
 )
 
 const maxDatagramSize = 32
@@ -24,6 +27,10 @@ type Server struct {
 
 // ListenAndServe makes the server start accepting http connections.
 func (s *Server) ListenAndServe() error {
+	if glog.V(1) {
+		glog.Infoln("starting http server on", s.Addr)
+		return http.ListenAndServe(s.Addr, httpLog(s.Handler))
+	}
 	return http.ListenAndServe(s.Addr, s.Handler)
 }
 
@@ -34,6 +41,7 @@ func (s *Server) ListenAndServe() error {
 // The optional "ready" argument can be used to notify when this
 // server is up and running. It is supposed to run on its own goroutine.
 func (s *Server) Discover(ready ...chan struct{}) error {
+	glog.V(1).Infoln("starting discovery server on", s.MulticastAddr)
 	addr, err := net.ResolveUDPAddr("udp", s.MulticastAddr)
 	if err != nil {
 		return err
@@ -54,8 +62,11 @@ func (s *Server) Discover(ready ...chan struct{}) error {
 			return err
 		}
 		if n != 2 {
+			glog.Errorf("received malformed UDP with %d bytes from %s: %v",
+				n, src, b)
 			continue
 		}
+		glog.V(2).Infof("received %d bytes UDP from %s: %v", n, src, b)
 		port := binary.BigEndian.Uint16(b)
 		host, _, err := net.SplitHostPort(src.String())
 		if err != nil {
@@ -85,7 +96,10 @@ func (s *Server) setUpstream(addr string) {
 	if s.upstream == nil {
 		s.upstream = make(map[string]struct{})
 	}
-	s.upstream[addr] = struct{}{}
+	if _, ok := s.upstream[addr]; !ok {
+		glog.V(2).Infof("upstream server discovered: %s", addr)
+		s.upstream[addr] = struct{}{}
+	}
 	// Notify without blocking.
 	if s.usev == nil {
 		s.usev = make(chan string, 1)
@@ -98,6 +112,7 @@ func (s *Server) setUpstream(addr string) {
 
 // delUpstream removes the given upstream from the internal list.
 func (s *Server) delUpstream(addr string) {
+	glog.V(2).Infof("upstream server deleted: %s", addr)
 	s.mu.Lock()
 	if s.upstream != nil {
 		delete(s.upstream, addr)
@@ -141,6 +156,7 @@ func (s *Server) foreachUpstream(f func(addr string) error) {
 // to other servers like this, which are listening for announcements
 // using the Discover function.
 func MulticastPing(addr string, port uint16) error {
+	glog.V(2).Infof("sending multicast ping to %s with value %v", addr, port)
 	a, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
 		return err
@@ -154,4 +170,57 @@ func MulticastPing(addr string, port uint16) error {
 	binary.BigEndian.PutUint16(b, port)
 	_, err = c.Write(b)
 	return err
+}
+
+// httpLog logs http requests.
+func httpLog(f http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := responseWriter{ResponseWriter: w, status: http.StatusOK}
+		start := time.Now()
+		f.ServeHTTP(&resp, r)
+		elapsed := time.Since(start)
+		glog.Infof("%s %d %q %q %s %db %s",
+			r.Proto,
+			resp.status,
+			r.Method,
+			r.URL.Path,
+			remoteIP(r),
+			resp.bytes,
+			elapsed,
+		)
+	})
+}
+
+// remoteIP returns the client's address without the port number.
+func remoteIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
+// responseWriter is an http.ResponseWriter that records the returned
+// status and bytes written to the client.
+type responseWriter struct {
+	http.ResponseWriter
+	flusher http.Flusher
+	status  int
+	bytes   int
+}
+
+// Write implements the http.ResponseWriter interface.
+func (w *responseWriter) Write(b []byte) (int, error) {
+	n, err := w.ResponseWriter.Write(b)
+	if err != nil {
+		return 0, err
+	}
+	w.bytes += n
+	return n, nil
+}
+
+// WriteHeader implements the http.ResponseWriter interface.
+func (w *responseWriter) WriteHeader(code int) {
+	w.status = code
+	w.ResponseWriter.WriteHeader(code)
 }
