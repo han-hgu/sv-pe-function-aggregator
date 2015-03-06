@@ -105,10 +105,8 @@ func (s *Server) delUpstream(addr string) {
 	s.mu.Unlock()
 }
 
-// foreachUpstream loops over each upstream server calling f in its own
-// goroutine. In case f returns an error, the upstream server is removed
-// from the internal list.
-func (s *Server) foreachUpstream(f func(addr string) error) {
+// upstreamList returns a list of all upstreams currently available.
+func (s *Server) upstreamList() []string {
 	s.mu.RLock()
 	i := 0
 	peers := make([]string, len(s.upstream))
@@ -117,9 +115,16 @@ func (s *Server) foreachUpstream(f func(addr string) error) {
 		i++
 	}
 	s.mu.RUnlock()
+	return peers
+}
+
+// foreachUpstream loops over each upstream server calling f in its own
+// goroutine. In case f returns an error, the upstream server is removed
+// from the internal list.
+func (s *Server) foreachUpstream(f func(addr string) error) {
 	var err error
 	var wg sync.WaitGroup
-	for _, addr := range peers {
+	for _, addr := range s.upstreamList() {
 		wg.Add(1)
 		go func(addr string) {
 			if err = f(addr); err != nil {

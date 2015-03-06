@@ -44,7 +44,7 @@ func TestServer_Upstream(t *testing.T) {
 		}
 		return nil
 	})
-	if len(s.upstream) != 2 {
+	if len(s.upstreamList()) != 2 {
 		t.Fatalf("Unexpected # of upstreams. Want 2, have %d", len(s.upstream))
 	}
 }

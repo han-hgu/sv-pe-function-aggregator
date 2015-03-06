@@ -52,6 +52,31 @@ func TestCORS_MethodUnsupported(t *testing.T) {
 	}
 }
 
+func TestHandler_Upstreams(t *testing.T) {
+	srv := new(Server)
+	srv.setUpstream("127.0.0.1:1111")
+	srv.setUpstream("127.0.0.1:2222")
+	handler := NewHandler(srv)
+	s := httptest.NewServer(handler)
+	defer s.Close()
+	resp, err := http.Get(s.URL + "/upstreams")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Unexpected server response: %s", resp.Status)
+	}
+	var u []string
+	err = json.NewDecoder(resp.Body).Decode(&u)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(u) != 2 {
+		t.Fatalf("Unexpected # of upstreams. Want 2, have %d", len(u))
+	}
+}
+
 func fakeTables(i int) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

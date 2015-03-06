@@ -10,9 +10,19 @@ import (
 // http handlers for endpoints that manage policy engine tables.
 func NewHandler(srv *Server) *http.ServeMux {
 	mux := http.NewServeMux()
+	mux.Handle("/upstreams", handleUpstreams(srv))
 	mux.Handle("/tables", handleTables(srv))
 	mux.Handle("/tables/", handleTableRows(srv))
 	return mux
+}
+
+// handleUpstreams return a JSON array containing the list of
+// upstream servers registered with this server.
+func handleUpstreams(srv *Server) http.HandlerFunc {
+	f := func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(srv.upstreamList())
+	}
+	return corsHandler(f, "GET")
 }
 
 // aggregateResponse is an object used to aggregate responses from
