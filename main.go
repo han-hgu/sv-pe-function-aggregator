@@ -22,7 +22,7 @@ func main() {
 	version := flag.Bool("version", false, "show version and exit")
 	flag.Parse()
 	if *version {
-		fmt.Printf("Sandvine API Aggregator %s", Version)
+		fmt.Println("Sandvine API Aggregator version", Version)
 		os.Exit(1)
 	}
 	if len(*maddr) > 0 && *maddr == *lmaddr {
