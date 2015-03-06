@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"runtime"
 	"strconv"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 var Version = "tip"
 
 func main() {
+	cpus := flag.Int("cpus", 0, "how many cpus to use (0=all)")
 	laddr := flag.String("http_addr", ":8080", "address in form of ip:port to listen on for http")
 	lmaddr := flag.String("multicast_addr", "224.0.0.1:8888", "address in form of ip:port to listen on for multicast")
 	maddr := flag.String("multicast_ping", "", "address in form of ip:port to announce ourselves via multicast")
@@ -28,6 +30,10 @@ func main() {
 	if len(*maddr) > 0 && *maddr == *lmaddr {
 		glog.Fatal("cannot announce ourselves to the same address that we listen on for multicast")
 	}
+	if *cpus <= 0 {
+		*cpus = runtime.NumCPU()
+	}
+	runtime.GOMAXPROCS(*cpus)
 	s := &Server{
 		Addr:          *laddr,
 		MulticastAddr: *lmaddr,
